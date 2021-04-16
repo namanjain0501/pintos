@@ -19,6 +19,9 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 
+// arguments should fir in 4kb page
+#define MAX_ARG_LEN 500
+
 typedef struct arguments
 {
   int argc;
@@ -36,6 +39,19 @@ void load_arguments(args_struct *args, void **esp)
   void* cur = *esp; 
 
   int i;
+
+  // limiting the sum of length of arguments
+
+  int len=0;
+  for(i=1;i<args->argc;i++)
+  {
+    len+=strlen(args->argv[i]);
+    if(len>MAX_ARG_LEN)
+    {
+      args->argc=i;
+      break;
+    }
+  }
 
 
   for(i=args->argc-1;i>=0;i--)
@@ -165,8 +181,17 @@ start_process (void *args)
   /* If load failed, quit. */
   free(args);
 
+  if(success)
+  {
+    thread_current()->load_status = 0;
+  }
+
+  sema_up(&(thread_current()->load_sem));
+  
   if (!success) 
+  {
     thread_exit ();
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -196,7 +221,7 @@ process_wait (tid_t child_tid)
   
   if(cur==NULL || cur->status==-1 || cur->status == THREAD_DYING || cur->parent_thread!= thread_current() || cur->wait_called)
   {
-    cur->status=-1;
+    thread_current()->child_exit_status=-1;
     return -1;
   }
   else
@@ -205,11 +230,11 @@ process_wait (tid_t child_tid)
     // wait for process to end
     while(cur->is_alive == true)
     {
-      asm volatile ("" : : : "memory");
+      thread_yield();
     }
   }
   
-  return cur->status; 
+  return thread_current()->child_exit_status;
 }
 
 /* Free the current process's resources. */
@@ -228,6 +253,9 @@ process_exit (void)
     thread_block ();
     intr_enable ();
   }
+
+  // close all opened files
+  close_handle(-1);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

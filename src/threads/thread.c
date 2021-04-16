@@ -437,6 +437,10 @@ thread_create (const char *name, int priority,
   t->wait_called = false;
   if (thread_current () != initial_thread)
     list_push_back (&thread_current()->child_threads, &t->child_threads_elem);
+  sema_init(&t->load_sem, 0);
+  t->load_status = -1;
+  t->child_exit_status=-1;
+  t->cur_fd = 2;
 #endif
 
   /* Add to run queue. */
